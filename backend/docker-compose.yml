@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sentiguard_db
+    environment:
+      POSTGRES_USER: sentiguard
+      POSTGRES_PASSWORD: sentiguard_secure_password
+      POSTGRES_DB: sentiguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U sentiguard" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentiguard_network
+
+  # SentiGuard Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentiguard_backend
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://sentiguard:sentiguard_secure_password@postgres:5432/sentiguard
+      - DEBUG=True
+      - ALLOWED_ORIGINS=http://localhost:8001,http://127.0.0.1:8001
+      # Twilio (optional)
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
+      - TWILIO_TO_NUMBERS=${TWILIO_TO_NUMBERS:-}
+    volumes:
+      - ./static:/app/static
+      - ./cloud_uploads:/app/cloud_uploads
+      - ./dashboard.html:/app/dashboard.html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sentiguard_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+
+networks:
+  sentiguard_network:
+    driver: bridge

@@ -1,0 +1,391 @@
+"""
+SentiGuard Edge Agent - Main Application
+=========================================
+Autonomous alarm system with multi-sensor fusion.
+
+Features:
+- Real-time video and audio processing
+- 12+ virtual sensors (motion, optical flow, loitering, pose, audio, etc.)
+- EMA smoothing and hysteresis
+- Comprehensive event payload
+- WebSocket streaming
+- RESTful API for configuration
+
+Author: SentiGuard Team
+Version: 2.0
+"""
+
+import cv2
+import asyncio
+import base64
+import json
+import numpy as np
+import time
+import os
+import math
+from datetime import datetime
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+import shutil
+
+# ... (imports)
+
+# ---------------------------------------------------------------------------
+# Global configuration constants
+# ---------------------------------------------------------------------------
+DEMO_MODE = False
+SITE_ID = 1
+DEVICE_ID = 42
+SITE_NAME = "Rural Security Station Alpha"
+SITE_LOCATION = {
+    "latitude": 28.7041,  # Example: Delhi, India
+    "longitude": 77.1025,
+    "address": "Village Road, Rural Area",
+    "region": "North India",
+    "timezone": "Asia/Kolkata"
+}
+MODEL_VERSIONS = {
+    "vision": "yolov8m_v1.0",
+    "audio": "scream_classifier_v1.0"
+}
+
+# ---------------------------------------------------------------------------
+# Simple system state holder
+# ---------------------------------------------------------------------------
+class SystemState:
+    def __init__(self):
+        self.running = False
+        self.camera_index = 0
+        self.source_type = "sample"  # auto, upload, sample (DEFAULT TO DEMO)
+        self.source_changed = False
+        self.uploaded_video_path = "uploaded_video.mp4"
+
+state = SystemState()
+
+# ---------------------------------------------------------------------------
+# FastAPI app and CORS middleware
+# ---------------------------------------------------------------------------
+app = FastAPI(title="SentiGuard Edge Agent", version="2.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ... (API endpoints)
+
+@app.post("/upload/video")
+async def upload_video(file: UploadFile = File(...)):
+    """Upload a video file to be used as a feed source."""
+    try:
+        with open(state.uploaded_video_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Auto-switch to uploaded video
+        state.source_type = "upload"
+        state.source_changed = True
+        return {"status": "success", "message": "Video uploaded and selected as source"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/config/source")
+def set_source(source: str):
+    """Set video source: 'auto', 'upload', 'sample'."""
+    if source not in ["auto", "upload", "sample"]:
+        return {"status": "error", "message": "Invalid source"}
+    state.source_type = source
+    state.source_changed = True
+    return {"status": "success", "source": source}
+
+# ... (rest of endpoints)
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+
+    def open_source():
+        """Open the video source based on current state."""
+        print(f"Opening source: {state.source_type}")
+        cap = None
+        
+        if state.source_type == "upload":
+            if os.path.exists(state.uploaded_video_path):
+                print("Using uploaded video.")
+                cap = cv2.VideoCapture(state.uploaded_video_path)
+            else:
+                print("Uploaded video not found, falling back to sample.")
+                state.source_type = "sample" # Fallback
+                
+        if state.source_type == "sample" or (state.source_type == "upload" and cap is None):
+             if os.path.exists("sample_video.mp4"):
+                print("Using sample video.")
+                cap = cv2.VideoCapture("sample_video.mp4")
+        
+        if cap is None or not cap.isOpened():
+            # Auto / Fallback to camera
+            print("Searching for camera...")
+            for idx in range(5):
+                cap = cv2.VideoCapture(idx)
+                if not cap.isOpened():
+                    cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                if cap.isOpened():
+                    # Quick check
+                    ret, frame = cap.read()
+                    if ret and np.sum(frame) > 0:
+                        print(f"Found camera {idx}")
+                        state.camera_index = idx
+                        return cap
+                    cap.release()
+            
+            # If still nothing, try demo video then sample as last resort
+            if os.path.exists("demo_video.mp4"):
+    last_motion_score = 0.0
+    frames_since_inference = 0
+    current_skip_interval = 3
+    
+    try:
+        while True:
+            # Check for source change request
+            if state.source_changed:
+                print("Switching video source...")
+                if cap: cap.release()
+                cap = open_source()
+                state.source_changed = False
+            
+            if not cap or not cap.isOpened():
+                print(f"⚠️ Video source not opened, attempting to re-open... (source_type: {state.source_type})")
+                if cap:
+                    cap.release()
+                cap = open_source()
+                if not cap or not cap.isOpened():
+                    print("❌ Failed to open video source, waiting...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    print(f"✓ Video source opened successfully!")
+
+            ret, frame = cap.read()
+            if not ret:
+                # Loop video files
+                if state.source_type in ["upload", "sample"] or state.camera_index == -1:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                
+                await websocket.send_json({"error": "Failed to read frame"})
+                break
+            
+            # ... (rest of processing loop)
+
+
+            # Resize for bandwidth
+            frame = cv2.resize(frame, (640, 480))
+            
+            # Timestamp overlay
+            cv2.putText(
+                frame,
+                datetime.now().strftime("%H:%M:%S"),
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 255, 0),
+                2,
+            )
+            
+            if DEMO_MODE:
+                cv2.putText(frame, "DEMO MODE", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+            frames_since_inference += 1
+            if frames_since_inference >= current_skip_interval:
+                # Run full AI inference
+                annotated_frame, motion_score, detections = vision.detect(frame)
+                last_detections = detections
+                last_motion_score = float(motion_score)
+                # Adjust skip interval based on activity
+                if detections:
+                    current_skip_interval = 2  # high‑performance mode
+                else:
+                    current_skip_interval = 6  # power‑save mode
+                frames_since_inference = 0
+            else:
+                # Use cached results
+                motion_score = last_motion_score
+                detections = last_detections
+                annotated_frame = vision.draw_detections(frame, detections)
+
+            # Audio processing
+            vocal_score = float(audio.get_score())
+            audio_rms = audio.get_rms()
+
+            # Compute all virtual sensors (including audio_fft placeholder)
+            all_sensors = virtual_sensors.get_all_sensors(
+                frame=frame,
+                detections=detections,
+                vocal_score=vocal_score,
+                audio_rms=audio_rms,
+                audio_fft=None,
+            )
+            
+            # -----------------------------------------------------------
+            # DEMO MODE SIMULATION
+            # -----------------------------------------------------------
+            if DEMO_MODE:
+                t = time.time()
+                for key in all_sensors:
+                    if isinstance(all_sensors[key], (int, float)):
+                        # Generate unique wave pattern for each sensor
+                        # Use hash of key to create stable random phase
+                        seed = sum(ord(c) for c in key)
+                        period = 2.0 + (seed % 5)  # 2-7 seconds period
+                        phase = seed % 10
+                        
+                        # Sine wave 0.0 to 1.0
+                        val = (math.sin(t * (2 * math.pi / period) + phase) + 1) / 2.0
+                        
+                        # Add some noise
+                        val += np.random.uniform(-0.05, 0.05)
+                        val = max(0.0, min(1.0, val))
+                        
+                        if "count" in key:
+                            all_sensors[key] = int(val * 10)
+                        elif "temp" in key:
+                            all_sensors[key] = 40 + val * 40  # 40-80C
+                        else:
+                            all_sensors[key] = val
+                            
+                # Force some critical alerts periodically
+                if (int(t) % 10) < 3:
+                    all_sensors['weapon_score'] = 0.95
+                    all_sensors['vocal_scream_score'] = 0.88
+
+
+            # Fusion – threat score
+            result = fusion.compute_threat_score(all_sensors)
+
+            # -----------------------------------------------------------
+            # Event / snapshot handling (only on alarm or weapon detection)
+            # -----------------------------------------------------------
+            has_weapon = any(d["class"] in ["knife", "scissors"] for d in detections)
+            snapshot_b64 = None
+            clip_url = None
+            if result.get("alarm"):
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                _, buffer = cv2.imencode('.jpg', annotated_frame)
+                snapshot_b64 = base64.b64encode(buffer).decode('utf-8')
+                filename = f"cloud_uploads/ALARM_{timestamp_str}.jpg"
+                os.makedirs("cloud_uploads", exist_ok=True)
+                cv2.imwrite(filename, annotated_frame)
+                clip_url = f"https://minio.example.com/clips/{SITE_ID}/{DEVICE_ID}/clip_{int(time.time())}.mp4"
+                print(f"🚨 ALARM TRIGGERED - Event saved: {filename}")
+                event_count += 1
+            elif has_weapon:
+                # Save a weapon image at most once per second
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"cloud_uploads/WEAPON_{timestamp_str}.jpg"
+                os.makedirs("cloud_uploads", exist_ok=True)
+                if not os.path.exists(filename):
+                    cv2.imwrite(filename, annotated_frame)
+                    print(f"⚠️ Weapon detected - Image saved: {filename}")
+
+            # -----------------------------------------------------------
+            # Prepare payload for WebSocket
+            # -----------------------------------------------------------
+            # Decide whether to send the full image (bandwidth optimisation)
+            send_image = True
+            if fusion.low_bandwidth:
+                is_alert = result["status"] in ["WARNING", "ALARM"]
+                now = time.time()
+                if not is_alert and (now % 5.0 > 0.2):
+                    send_image = False
+
+            frame_b64 = None
+            if send_image:
+                _, buffer = cv2.imencode('.jpg', annotated_frame)
+                frame_b64 = base64.b64encode(buffer).decode('utf-8')
+                payload_image = f"data:image/jpeg;base64,{frame_b64}"
+            else:
+                payload_image = None
+
+            payload = {
+                "image": payload_image,
+                "event": {
+                    "site_id": SITE_ID,
+                    "device_id": DEVICE_ID,
+                    "site_name": SITE_NAME,
+                    "location": SITE_LOCATION,
+                    "timestamp": time.time(),
+                    # Core sensor values (example subset – you can expand as needed)
+                    "motion_score": float(all_sensors.get('motion_score', 0.0)),
+                    "optical_flow_magnitude": float(all_sensors.get('optical_flow_magnitude', 0.0)),
+                    "loitering_duration": float(all_sensors.get('loitering_duration', 0.0)),
+                    "trajectory_erraticity": float(all_sensors.get('trajectory_erraticity', 0.0)),
+                    "crowd_density": float(all_sensors.get('crowd_density', 0.0)),
+                    "posture_risk_score": float(all_sensors.get('posture_risk_score', 0.0)),
+                    "vocal_scream_score": float(all_sensors.get('vocal_scream_score', 0.0)),
+                    "ambient_noise_level": float(all_sensors.get('ambient_noise_level', 0.0)),
+                    # Fusion results
+                    "threat_score": float(result.get('threat_score', 0.0)),
+                    "alarm": bool(result.get('alarm', False)),
+                    "status": result.get('status'),
+                    "alarm_duration": float(result.get('alarm_duration', 0.0)),
+                    # Media payloads
+                    "snapshot_b64": snapshot_b64,
+                    "clip_url": clip_url,
+                    "model_versions": MODEL_VERSIONS,
+                    "meta": {
+                        "frame_count": virtual_sensors.frame_count,
+                        "has_weapon": has_weapon,
+                        "detections": detections,
+                    },
+                    # System health
+                    "camera_health": all_sensors.get('camera_health'),
+                    "lighting_quality": float(all_sensors.get('lighting_quality', 0.0)),
+                },
+                "data": {
+                    "status": result.get('status'),
+                    "threat_score": float(result.get('threat_score', 0.0)),
+                    "motion_score": float(all_sensors.get('motion_score', 0.0)),
+                    "vocal_score": float(all_sensors.get('vocal_scream_score', 0.0)),
+                    "has_weapon": has_weapon,
+                    "detections": detections,
+                    "sensors_raw": result.get('sensors_raw'),
+                    "sensors_smoothed": result.get('sensors_smoothed'),
+                },
+            }
+
+            # Helper to make JSON‑serialisable (convert numpy types)
+            def sanitize(obj):
+                if isinstance(obj, (np.integer, int)):
+                    return int(obj)
+                if isinstance(obj, (np.floating, float)):
+                    return float(obj)
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                if isinstance(obj, dict):
+                    return {k: sanitize(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [sanitize(i) for i in obj]
+                return obj
+
+            await websocket.send_json(sanitize(payload))
+            await asyncio.sleep(0.05)  # ~20 FPS
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        cap.release()
+
+if __name__ == "__main__":
+    import uvicorn
+    print("=" * 60)
+    print("SentiGuard Edge Agent v2.0")
+    print("=" * 60)
+    print(f"Site ID: {SITE_ID}")
+    print(f"Device ID: {DEVICE_ID}")
+    print(f"Model Versions: {MODEL_VERSIONS}")
+    print("=" * 60)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

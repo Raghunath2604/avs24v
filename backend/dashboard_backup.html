@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentiGuard - Advanced Security Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+
+    .sensor-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sensor-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .threat-gauge {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      margin: 0 auto;
+    }
+
+    .gauge-circle {
+      transform: rotate(-90deg);
+      transform-origin: center;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .video-container {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .category-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .vision-badge {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+
+    .audio-badge {
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+    }
+
+    .behavior-badge {
+      background: linear-gradient(135deg, #fa709a, #fee140);
+    }
+
+    .system-badge {
+      background: linear-gradient(135deg, #30cfd0, #330867);
+    }
+  </style>
+</head>
+
+<body class="p-4">
+
+  <!-- Header -->
+  <div class="glass rounded-2xl p-6 mb-6">
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-4xl font-bold text-white mb-2">🛡️ SentiGuard</h1>
+        <p class="text-white/70 text-sm">Advanced Multi-Sensor Security System</p>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="text-right">
+          <div class="text-xs text-white/60 uppercase tracking-wide">System Status</div>
+          <div id="ws-status" class="text-lg font-semibold text-green-400">Connecting...</div>
+        </div>
+        <div class="threat-gauge">
+          <svg class="w-full h-full" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8" />
+            <circle id="threat-circle" class="gauge-circle" cx="50" cy="50" r="45" fill="none"
+              stroke="url(#threat-gradient)" stroke-width="8" stroke-linecap="round" stroke-dasharray="283"
+              stroke-dashoffset="283" />
+            <defs>
+              <linearGradient id="threat-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#4ade80;stop-opacity:1" id="grad-start" />
+                <stop offset="100%" style="stop-color:#ef4444;stop-opacity:1" id="grad-end" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <div id="threat-percent" class="text-3xl font-bold text-white">0%</div>
+            <div class="text-xs text-white/60 uppercase">Threat</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-6">
+
+    <!-- Left: Live Feed -->
+    <div class="col-span-12 lg:col-span-5">
+      <div class="glass rounded-2xl p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-semibold text-white">📹 Live Feed</h2>
+          <div class="flex space-x-2">
+            <button onclick="setSource('auto')"
+              class="px-3 py-1 text-xs rounded-lg bg-white/20 hover:bg-white/30 text-white transition">Camera</button>
+            <button onclick="setSource('sample')"
+              class="px-3 py-1 text-xs rounded-lg bg-white/20 hover:bg-white/30 text-white transition">Sample</button>
+            <label
+              class="px-3 py-1 text-xs rounded-lg bg-white/20 hover:bg-white/30 text-white cursor-pointer transition">
+              Upload<input type="file" id="video-upload" class="hidden" accept="video/*" onchange="uploadVideo(this)">
+            </label>
+          </div>
+        </div>
+        <div class="video-container">
+          <img id="live-feed" src="" alt="Waiting..." class="w-full h-auto">
+          <div id="alarm-badge"
+            class="hidden absolute top-4 right-4 px-4 py-2 bg-red-600 text-white font-bold rounded-lg pulse">
+            🚨 ALARM
+          </div>
+          <div id="demo-badge"
+            class="hidden absolute top-4 left-4 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-lg">
+            DEMO MODE
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Log -->
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-4">📋 Recent Events</h2>
+        <div id="event-log" class="space-y-2 max-h-64 overflow-y-auto">
+          <!-- Events here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: All Sensors -->
+    <div class="col-span-12 lg:col-span-7 space-y-6">
+
+      <!-- Vision Sensors -->
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-white">👁️ Vision Sensors</h2>
+          <span class="category-badge vision-badge text-white">20 Sensors</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="vision-sensors"></div>
+      </div>
+
+      <!-- Audio Sensors -->
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-white">🎤 Audio Sensors</h2>
+          <span class="category-badge audio-badge text-white">15 Sensors</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="audio-sensors"></div>
+      </div>
+
+      <!-- Behavior Sensors -->
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-white">🚶 Behavior & Tracking</h2>
+          <span class="category-badge behavior-badge text-white">10 Sensors</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="behavior-sensors"></div>
+      </div>
+
+      <!-- System Sensors -->
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold text-white">⚙️ System & Environment</h2>
+          <span class="category-badge system-badge text-white">5 Sensors</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="system-sensors"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SENSORS = {
+      vision: ['motion_score', 'optical_flow_magnitude', 'trajectory_erraticity', 'loitering_duration',
+        'crowd_density', 'posture_risk_score', 'fall_detect_score', 'running_score',
+        'fight_interaction_score', 'aggressive_pose_score', 'weapon_score', 'object_sharpness_score',
+        'tampering_score', 'camera_health', 'lighting_quality', 'visibility_score',
+        'environment_intrusion_score', 'interaction_object_score', 'panic_crowd_movement_score',
+        'object_drop_or_pick_score'],
+      audio: ['vocal_scream_score', 'aggressive_voice_score', 'metal_impact_audio_score', 'glass_break_audio_score',
+        'gunshot_like_score', 'high_pitch_distress_score', 'low_frequency_thud_score', 'ambient_noise_level',
+        'speech_activity_rate', 'vocal_event_count', 'audio_direction_confidence', 'background_sound_class',
+        'silence_anomaly_score', 'wind_noise_score', 'audio_spectral_anomaly_score'],
+      behavior: ['person_entry_count', 'person_exit_count', 'group_formation_score', 'approach_towards_camera_score',
+        'following_behavior_score', 'body_velocity_spike_score', 'repeat_intruder_score', 'vehicle_presence_score',
+        'vehicle_speed_estimate', 'person_identity_hash'],
+      system: ['device_cpu_temp', 'device_ram_usage', 'device_storage_usage', 'network_quality_score', 'time_of_day_context']
+    };
+
+    function createSensorCard(key) {
+      const div = document.createElement('div');
+      div.className = 'sensor-card rounded-xl p-3';
+      div.innerHTML = `
+        <div class="text-xs text-white/60 capitalize mb-1 truncate" title="${key}">${key.replace(/_/g, ' ')}</div>
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-bold text-white" id="val-${key}">-</div>
+          <div class="w-16 h-2 bg-white/20 rounded-full overflow-hidden">
+            <div id="bar-${key}" class="h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      `;
+      return div;
+    }
+
+    circle.style.strokeDashoffset = offset;
+    text.textContent = `${percent}%`;
+
+    // Update gradient colors
+    const gradStart = document.getElementById('grad-start');
+    const gradEnd = document.getElementById('grad-end');
+    if (percent > 75) {
+      gradStart.style.stopColor = '#ef4444';
+      gradEnd.style.stopColor = '#dc2626';
+    } else if (percent > 40) {
+      gradStart.style.stopColor = '#f59e0b';
+      gradEnd.style.stopColor = '#ef4444';
+    } else {
+      gradStart.style.stopColor = '#4ade80';
+      gradEnd.style.stopColor = '#22c55e';
+    }
+    }
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+      const statusEl = document.getElementById('ws-status');
+
+      ws.onopen = () => {
+        statusEl.textContent = 'Connected ✓';
+        statusEl.className = 'text-lg font-semibold text-green-400';
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = 'Disconnected';
+        statusEl.className = 'text-lg font-semibold text-red-400';
+        setTimeout(connect, 2000);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.error) return;
+
+        if (data.image) document.getElementById('live-feed').src = data.image;
+
+        const ev = data.event || {};
+        const threat = ev.threat_score || 0;
+        updateThreatGauge(threat);
+
+        // Alarm badge
+        const alarmBadge = document.getElementById('alarm-badge');
+        if (ev.status === 'ALARM') alarmBadge.classList.remove('hidden');
+        else alarmBadge.classList.add('hidden');
+
+        // Update sensors
+        Object.keys(SENSORS).forEach(group => {
+          SENSORS[group].forEach(key => {
+            let val = ev[key];
+            if (key === 'camera_health' && typeof val === 'object') val = val.fps || 0;
+
+            let displayVal = val;
+            let pct = 0;
+
+            if (typeof val === 'number') {
+              if (val > 1 && val < 100) displayVal = val.toFixed(1);
+              else if (val <= 1) displayVal = (val * 100).toFixed(0) + '%';
+
+              if (key.includes('temp')) pct = (val / 100) * 100;
+              else if (key.includes('count')) pct = Math.min(val * 10, 100);
+              else pct = val * 100;
+            } else if (typeof val === 'boolean') {
+              displayVal = val ? 'YES' : 'NO';
+              pct = val ? 100 : 0;
+            }
+
+            const valEl = document.getElementById(`val-${key}`);
+            const barEl = document.getElementById(`bar-${key}`);
+
+            if (valEl) valEl.textContent = displayVal;
+            if (barEl) {
+              barEl.style.width = `${Math.min(pct, 100)}%`;
+              if (key === 'weapon_score' && val > 0.3) {
+                barEl.className = 'h-full bg-gradient-to-r from-red-500 to-red-700 transition-all duration-300';
+              } else if (pct > 75) {
+                barEl.className = 'h-full bg-gradient-to-r from-red-400 to-red-600 transition-all duration-300';
+              } else if (pct > 40) {
+                barEl.className = 'h-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-300';
+              } else {
+                barEl.className = 'h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-300';
+              }
+            }
+          });
+        });
+
+        // Event log
+        if (ev.status !== 'OK' || threat > 0.5) {
+          const log = document.getElementById('event-log');
+          const entry = document.createElement('div');
+          entry.className = 'text-sm p-2 bg-white/10 rounded-lg text-white';
+          entry.innerHTML = `<span class="font-semibold">${new Date().toLocaleTimeString()}</span> - ${ev.status} (${Math.round(threat * 100)}%)`;
+          log.insertBefore(entry, log.firstChild);
+
+</html >

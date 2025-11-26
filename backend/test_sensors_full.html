@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentiGuard 50-Sensor Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #f3f4f6;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .sensor-card {
+      transition: all 0.2s;
+    }
+
+    .sensor-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .bar-bg {
+      background-color: #e5e7eb;
+      border-radius: 9999px;
+      height: 0.5rem;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+
+<body class="p-4">
+
+  <!-- Header -->
+  <header class="bg-white shadow rounded-lg p-4 mb-4 flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">SentiGuard Master Dashboard</h1>
+      <p class="text-sm text-gray-500">Site: Rural Station Alpha | Device: #42</p>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div id="ws-status" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-600">Connecting...
+      </div>
+      <div id="system-status" class="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">System OK
+      </div>
+      <div class="text-right">
+        <div class="text-xs text-gray-500">Threat Score</div>
+        <div id="threat-score" class="text-xl font-bold text-gray-800">0%</div>
+      </div>
+    </div>
+    <div id="event-log" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm">
+      <!-- Events will appear here -->
+    </div>
+    </div>
+    </div>
+
+    <!-- Right Panel: 50 Sensors -->
+    <div class="col-span-12 lg:col-span-8 space-y-4">
+
+      <!-- Vision Sensors -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3 text-blue-600">Vision Sensors (20)</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="vision-sensors">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Audio Sensors -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3 text-purple-600">Audio Sensors (15)</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="audio-sensors">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Behavior Sensors -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3 text-orange-600">Behavior & Tracking (10)</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="behavior-sensors">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- System Sensors -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3 text-gray-600">System & Environment (5)</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" id="system-sensors">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </div>
+    </div>
+
+    <script>
+      // Sensor Definitions
+      const SENSORS = {
+        vision: [
+          'motion_score', 'optical_flow_magnitude', 'trajectory_erraticity', 'loitering_duration',
+          'crowd_density', 'posture_risk_score', 'fall_detect_score', 'running_score',
+          'fight_interaction_score', 'aggressive_pose_score', 'weapon_score', 'object_sharpness_score',
+          'tampering_score', 'camera_health', 'lighting_quality', 'visibility_score',
+          'environment_intrusion_score', 'interaction_object_score', 'panic_crowd_movement_score',
+          'object_drop_or_pick_score'
+        ],
+        audio: [
+          'vocal_scream_score', 'aggressive_voice_score', 'metal_impact_audio_score', 'glass_break_audio_score',
+          'gunshot_like_score', 'high_pitch_distress_score', 'low_frequency_thud_score', 'ambient_noise_level',
+          'speech_activity_rate', 'vocal_event_count', 'audio_direction_confidence', 'background_sound_class',
+          'silence_anomaly_score', 'wind_noise_score', 'audio_spectral_anomaly_score'
+        ],
+        behavior: [
+          'person_entry_count', 'person_exit_count', 'group_formation_score', 'approach_towards_camera_score',
+          'following_behavior_score', 'body_velocity_spike_score', 'repeat_intruder_score', 'vehicle_presence_score',
+          'vehicle_speed_estimate', 'person_identity_hash'
+        ],
+        system: [
+          'device_cpu_temp', 'device_ram_usage', 'device_storage_usage', 'network_quality_score', 'time_of_day_context'
+        ]
+      };
+
+      // Init UI
+      function createSensorCard(key) {
+        const div = document.createElement('div');
+        div.className = 'bg-gray-50 p-2 rounded border border-gray-100 sensor-card';
+        div.innerHTML = `
+                <div class="text-xs text-gray-500 capitalize truncate" title="${key}">${key.replace(/_/g, ' ')}</div>
+                <div class="flex items-end justify-between mt-1">
+                    <div class="text-sm font-bold text-gray-800" id="val-${key}">-</div>
+                    <div class="w-1/2">
+                        <div class="bar-bg">
+                            <div id="bar-${key}" class="bar-fill bg-blue-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        return div;
+      }
+
+      Object.keys(SENSORS).forEach(group => {
+        const container = document.getElementById(`${group}-sensors`);
+        SENSORS[group].forEach(key => {
+          container.appendChild(createSensorCard(key));
+        });
+      });
+
+      // WebSocket
+      const wsUrl = `ws://${window.location.hostname}:8001/ws`;
+      let ws;
+
+      function connect() {
+        ws = new WebSocket(wsUrl);
+        const statusEl = document.getElementById('ws-status');
+
+        ws.onopen = () => {
+          statusEl.textContent = 'Connected';
+          statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
+        };
+
+        ws.onclose = () => {
+          statusEl.textContent = 'Disconnected';
+          statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800';
+          setTimeout(connect, 2000);
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.error) return;
+
+          // Update Image
+          if (data.image) {
+            document.getElementById('live-feed').src = data.image;
+          }
+
+          const ev = data.event || {};
+
+          // Update Threat
+          const threat = (ev.threat_score || 0) * 100;
+          document.getElementById('threat-score').textContent = `${threat.toFixed(0)}%`;
+
+          // Update Status
+          const sysStatus = document.getElementById('system-status');
+          const overlay = document.getElementById('cam-overlay');
+          sysStatus.textContent = ev.status || 'OK';
+
+          if (ev.status === 'ALARM') {
+            sysStatus.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-600 text-white animate-pulse';
+            overlay.classList.remove('hidden');
+          } else if (ev.status === 'WARNING') {
+            sysStatus.className = 'px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
+            overlay.classList.add('hidden');
+          } else {
+            sysStatus.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
+            overlay.classList.add('hidden');
+          }
+
+          // Update Sensors
+          Object.keys(SENSORS).forEach(group => {
+            SENSORS[group].forEach(key => {
+              let val = ev[key];
+              // Handle nested camera_health
+              if (key === 'camera_health' && typeof val === 'object') {
+                val = val.fps || 0;
+              }
+
+              // Format value
+              let displayVal = val;
+              let pct = 0;
+
+              if (typeof val === 'number') {
+                if (val > 1 && val < 100) displayVal = val.toFixed(1); // e.g. temp
+                else if (val <= 1) displayVal = (val * 100).toFixed(0) + '%';
+
+                // Normalize for bar
+                if (key.includes('temp')) pct = (val / 100) * 100;
+                else if (key.includes('count')) pct = Math.min(val * 10, 100);
+                else pct = val * 100;
+              } else if (typeof val === 'boolean') {
+                displayVal = val ? 'YES' : 'NO';
+                pct = val ? 100 : 0;
+              }
+
+              // Update DOM
+              const valEl = document.getElementById(`val-${key}`);
+              const barEl = document.getElementById(`bar-${key}`);
+
+              if (valEl) valEl.textContent = displayVal;
+              if (barEl) {
+                barEl.style.width = `${Math.min(pct, 100)}%`;
+                // Color rules
+                if (key === 'weapon_score' && val > 0.3) barEl.className = 'bar-fill bg-red-600';
+                else if (pct > 75) barEl.className = 'bar-fill bg-red-500';
+                else if (pct > 40) barEl.className = 'bar-fill bg-yellow-500';
+                else barEl.className = 'bar-fill bg-green-500';
+              }
+            });
+          });
+
+          // Add to log if status changed or high threat
+                <div class="bg-white rounded-lg shadow p-4">
+                  <h2 class="text-lg font-semibold mb-3 text-blue-600">Vision Sensors (20)</h2>
+                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="vision-sensors">
+                    <!-- Populated by JS -->
+                  </div>
+                </div>
+
+                <!--Audio Sensors-- >
+                <div class="bg-white rounded-lg shadow p-4">
+                  <h2 class="text-lg font-semibold mb-3 text-purple-600">Audio Sensors (15)</h2>
+                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="audio-sensors">
+                    <!-- Populated by JS -->
+                  </div>
+                </div>
+
+                <!--Behavior Sensors-- >
+                <div class="bg-white rounded-lg shadow p-4">
+                  <h2 class="text-lg font-semibold mb-3 text-orange-600">Behavior & Tracking (10)</h2>
+                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" id="behavior-sensors">
+                    <!-- Populated by JS -->
+                  </div>
+                </div>
+
+                <!--System Sensors-- >
+            <div class="bg-white rounded-lg shadow p-4">
+              <h2 class="text-lg font-semibold mb-3 text-gray-600">System & Environment (5)</h2>
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" id="system-sensors">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+
+              </div >
+    </div >
+
+            <script>
+      // Sensor Definitions
+              const SENSORS = {
+                vision: [
+              'motion_score', 'optical_flow_magnitude', 'trajectory_erraticity', 'loitering_duration',
+              'crowd_density', 'posture_risk_score', 'fall_detect_score', 'running_score',
+              'fight_interaction_score', 'aggressive_pose_score', 'weapon_score', 'object_sharpness_score',
+              'tampering_score', 'camera_health', 'lighting_quality', 'visibility_score',
+              'environment_intrusion_score', 'interaction_object_score', 'panic_crowd_movement_score',
+              'object_drop_or_pick_score'
+              ],
+              audio: [
+              'vocal_scream_score', 'aggressive_voice_score', 'metal_impact_audio_score', 'glass_break_audio_score',
+              'gunshot_like_score', 'high_pitch_distress_score', 'low_frequency_thud_score', 'ambient_noise_level',
+              'speech_activity_rate', 'vocal_event_count', 'audio_direction_confidence', 'background_sound_class',
+              'silence_anomaly_score', 'wind_noise_score', 'audio_spectral_anomaly_score'
+              ],
+              behavior: [
+              'person_entry_count', 'person_exit_count', 'group_formation_score', 'approach_towards_camera_score',
+              'following_behavior_score', 'body_velocity_spike_score', 'repeat_intruder_score', 'vehicle_presence_score',
+              'vehicle_speed_estimate', 'person_identity_hash'
+              ],
+              system: [
+              'device_cpu_temp', 'device_ram_usage', 'device_storage_usage', 'network_quality_score', 'time_of_day_context'
+              ]
+      };
+
+              // Init UI
+              function createSensorCard(key) {
+        const div = document.createElement('div');
+              div.className = 'bg-gray-50 p-2 rounded border border-gray-100 sensor-card';
+              div.innerHTML = `
+              <div class="text-xs text-gray-500 capitalize truncate" title="${key}">${key.replace(/_/g, ' ')}</div>
+              <div class="flex items-end justify-between mt-1">
+                <div class="text-sm font-bold text-gray-800" id="val-${key}">-</div>
+                <div class="w-1/2">
+                  <div class="bar-bg">
+                    <div id="bar-${key}" class="bar-fill bg-blue-500" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+              `;
+              return div;
+      }
+
+      Object.keys(SENSORS).forEach(group => {
+        const container = document.getElementById(`${group}-sensors`);
+        SENSORS[group].forEach(key => {
+                container.appendChild(createSensorCard(key));
+        });
+      });
+
+              // WebSocket
+              const wsUrl = `ws://${window.location.hostname}:8001/ws`;
+              let ws;
+
+              function connect() {
+                ws = new WebSocket(wsUrl);
+              const statusEl = document.getElementById('ws-status');
+
+        ws.onopen = () => {
+                statusEl.textContent = 'Connected';
+              statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
+        };
+
+        ws.onclose = () => {
+                statusEl.textContent = 'Disconnected';
+              statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800';
+              setTimeout(connect, 2000);
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+              if (data.error) return;
+
+              // Update Image
+              if (data.image) {
+                document.getElementById('live-feed').src = data.image;
+          }
+
+              const ev = data.event || { };
+
+              // Update Threat
+              const threat = (ev.threat_score || 0) * 100;
+              document.getElementById('threat-score').textContent = `${threat.toFixed(0)}%`;
+
+              // Update Status
+              const sysStatus = document.getElementById('system-status');
+              const overlay = document.getElementById('cam-overlay');
+              sysStatus.textContent = ev.status || 'OK';
+
+              if (ev.status === 'ALARM') {
+                sysStatus.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-600 text-white animate-pulse';
+              overlay.classList.remove('hidden');
+          } else if (ev.status === 'WARNING') {
+                sysStatus.className = 'px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
+              overlay.classList.add('hidden');
+          } else {
+                sysStatus.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
+              overlay.classList.add('hidden');
+          }
+
+          // Update Sensors
+          Object.keys(SENSORS).forEach(group => {
+                SENSORS[group].forEach(key => {
+                  let val = ev[key];
+                  // Handle nested camera_health
+                  if (key === 'camera_health' && typeof val === 'object') {
+                    val = val.fps || 0;
+                  }
+
+                  // Format value
+                  let displayVal = val;
+                  let pct = 0;
+
+                  if (typeof val === 'number') {
+                    if (val > 1 && val < 100) displayVal = val.toFixed(1); // e.g. temp
+                    else if (val <= 1) displayVal = (val * 100).toFixed(0) + '%';
+
+                    // Normalize for bar
+                    if (key.includes('temp')) pct = (val / 100) * 100;
+                    else if (key.includes('count')) pct = Math.min(val * 10, 100);
+                    else pct = val * 100;
+                  } else if (typeof val === 'boolean') {
+                    displayVal = val ? 'YES' : 'NO';
+                    pct = val ? 100 : 0;
+                  }
+
+                  // Update DOM
+                  const valEl = document.getElementById(`val-${key}`);
+                  const barEl = document.getElementById(`bar-${key}`);
+
+                  if (valEl) valEl.textContent = displayVal;
+                  if (barEl) {
+                    barEl.style.width = `${Math.min(pct, 100)}%`;
+                    // Color rules
+                    if (key === 'weapon_score' && val > 0.3) barEl.className = 'bar-fill bg-red-600';
+                    else if (pct > 75) barEl.className = 'bar-fill bg-red-500';
+                    else if (pct > 40) barEl.className = 'bar-fill bg-yellow-500';
+                    else barEl.className = 'bar-fill bg-green-500';
+                  }
+                });
+          });
+
+          // Add to log if status changed or high threat
+          if (ev.status !== 'OK' || threat > 50) {
+            const log = document.getElementById('event-log');
+              const entry = document.createElement('div');
+              entry.className = 'text-xs border-b border-gray-50 pb-1';
+              entry.innerHTML = `<span class="font-bold text-gray-600">${new Date().toLocaleTimeString()}</span>: ${ev.status} (Threat: ${threat.toFixed(0)}%)`;
+              log.prepend(entry);
+          }
+        };
+      }
+
+              // Source Control
+              async function setSource(source) {
+            try {
+                const res = await fetch(`http://${window.location.hostname}:8001/config/source?source=${source}`, {method: 'POST' });
+              const data = await res.json();
+              console.log('Source set:', data);
+            } catch (e) {console.error(e); }
+        }
+
+              async function uploadVideo(input) {
+            if (!input.files || !input.files[0]) return;
+              const file = input.files[0];
+              const formData = new FormData();
+              formData.append('file', file);
+
+              try {
+                const res = await fetch(`http://${window.location.hostname}:8001/upload/video`, {
+                method: 'POST',
+              body: formData
+                });
+              const data = await res.json();
+              console.log('Upload result:', data);
+              if (data.status === 'success') {
+                alert('Video uploaded and active!');
+                } else {
+                alert('Upload failed: ' + data.message);
+                }
+            } catch (e) {
+                console.error(e);
+              alert('Upload error');
+            }
+        }
+
+              connect();
+    </script>
+</body>
+
+</html>

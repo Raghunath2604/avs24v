@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentiGuard Virtual Sensors - Enhanced Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .location-info {
+            text-align: right;
+            font-size: 0.9em;
+        }
+
+        .location-info .site-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .status {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+        }
+
+        .status.connected {
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+        }
+
+        .status.disconnected {
+            background: rgba(244, 67, 54, 0.3);
+            border: 2px solid #f44336;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .video-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            display: block;
+        }
+
+        .threat-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .threat-score {
+            font-size: 4em;
+            text-align: center;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .threat-status {
+            text-align: center;
+            font-size: 2em;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .threat-status.SAFE {
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+        }
+
+        .threat-status.WARNING {
+            background: rgba(255, 193, 7, 0.3);
+            border: 2px solid #FFC107;
+            animation: pulse-warning 2s infinite;
+        }
+
+        .threat-status.ALARM {
+            background: rgba(244, 67, 54, 0.5);
+            border: 3px solid #f44336;
+            animation: pulse-alarm 0.5s infinite;
+            box-shadow: 0 0 30px rgba(244, 67, 54, 0.8);
+        }
+
+        @keyframes pulse-warning {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.8;
+                transform: scale(1.02);
+            }
+        }
+
+        @keyframes pulse-alarm {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 0 30px rgba(244, 67, 54, 0.8);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(1.05);
+                box-shadow: 0 0 50px rgba(244, 67, 54, 1);
+            }
+        }
+
+        @keyframes flash {
+
+            0%,
+            100% {
+                background-color: rgba(244, 67, 54, 0.3);
+            }
+
+            50% {
+                background-color: rgba(244, 67, 54, 0.8);
+            }
+        }
+
+        body.alarm-active {
+            animation: flash 1s infinite;
+        }
+
+        .alarm-controls {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .alarm-controls label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .alarm-controls input[type="checkbox"] {
+            margin-right: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        button.danger {
+            background: rgba(244, 67, 54, 0.5);
+            border-color: #f44336;
+        }
+
+        .sensors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .sensor-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s;
+        }
+
+        .sensor-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .sensor-name {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        .sensor-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .sensor-bar {
+            height: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .sensor-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #FFC107, #f44336);
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+
+        .events-section {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+        }
+
+        .events-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 4px solid;
+            border-radius: 5px;
+        }
+
+        .event-item.ALARM {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .event-item.WARNING {
+            border-left-color: #FFC107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+
+        .event-item.SAFE {
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .event-time {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+
+        .metadata {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .metadata-item {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+
+        .metadata-label {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+
+        .metadata-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🛡️ SentiGuard - Enhanced Security Dashboard</h1>
+                <div id="status" class="status disconnected">
+                    <span id="statusText">Connecting to WebSocket...</span>
+                </div>
+            </div>
+            <div class="location-info">
+                <div class="site-name" id="siteName">Loading...</div>
+                <div id="locationAddress">📍 Loading location...</div>
+                <div id="locationCoords"></div>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="video-container">
+                <h2>📹 Live Camera Feed</h2>
+                <img id="videoFeed" src="" alt="Waiting for video...">
+            </div>
+
+            <div class="threat-container">
+                <h2>⚠️ Threat Analysis</h2>
+                <div class="threat-score" id="threatScore">0.00</div>
+                <div class="threat-status SAFE" id="threatStatus">SAFE</div>
+                <div style="margin-top: 20px;">
+                    <div style="margin-bottom: 10px;">Alarm: <span id="alarmState">❌ No</span></div>
+                    <div style="margin-bottom: 10px;">Duration: <span id="alarmDuration">0.0s</span></div>
+                    <div style="margin-bottom: 10px;">Weapon: <span id="weaponStatus">❌ No</span></div>
+                </div>
+
+                <div class="alarm-controls">
+                    <h3>🔊 Alarm Settings</h3>
+                    <label>
+                        <input type="checkbox" id="enableSound" checked> Enable Alarm Sound
+                    </label>
+                    <label>
+                        <input type="checkbox" id="enableFlash" checked> Enable Visual Flash
+                    </label>
+                    <label>
+                        <input type="checkbox" id="enableVoice"> Enable Voice Alert
+                    </label>
+                    <button onclick="testAlarm()">🔔 Test Alarm</button>
+                    <button class="danger" onclick="simulateAudio()">📢 Simulate Audio</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sensors-grid" id="sensorsGrid">
+            <!-- Sensors will be dynamically populated -->
+        </div>
+
+        <div class="events-section">
+            <h2>📋 Event History (Last 10)</h2>
+            <div class="events-list" id="eventsList">
+                <p style="opacity: 0.5;">No events yet...</p>
+            </div>
+        </div>
+
+        <div class="metadata">
+            <h2>📊 System Metadata</h2>
+            <div class="metadata-grid" id="metadataGrid">
+                <!-- Metadata will be dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Alarm Sounds -->
+    <audio id="alarmSound" loop preload="auto">
+        <!-- Using browser-generated alarm tone -->
+    </audio>
+
+    <script>
+        let ws = null;
+        let frameCount = 0;
+        let eventHistory = [];
+        let currentAlarm = false;
+        let alarmAudioContext = null;
+        let alarmOscillator = null;
+        let alarmGainNode = null;
+
+        const sensorDefinitions = [
+            { key: 'motion_score', name: 'Motion Score', unit: '' },
+            { key: 'optical_flow_magnitude', name: 'Optical Flow', unit: '' },
+            { key: 'loitering_duration', name: 'Loitering Duration', unit: 's' },
+            { key: 'trajectory_erraticity', name: 'Trajectory Erratic', unit: '' },
+            { key: 'crowd_density', name: 'Crowd Density', unit: '' },
+            { key: 'posture_risk_score', name: 'Posture Risk', unit: '' },
+            { key: 'vocal_scream_score', name: 'Vocal Scream', unit: '' }, 'vocal_event_count', name: 'Vocal Events', unit: '' },
+        { key: 'ambient_noise_level', name: 'Ambient Noise', unit: '' },
+        { key: 'lighting_quality', name: 'Lighting Quality', unit: '' }
+        ];
+
+        // Initialize audio context for alarm
+        function initAlarm() {
+            if (!alarmAudioContext) {
+                alarmAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                alarmGainNode = alarmAudioContext.createGain();
+                alarmGainNode.connect(alarmAudioContext.destination);
+                alarmGainNode.gain.value = 0;
+            }
+        }
+
+        function playAlarmSound() {
+            if (!document.getElementById('enableSound').checked) return;
+
+            initAlarm();
+
+            if (!alarmOscillator) {
+                // Create alternating siren sound
+                alarmOscillator = alarmAudioContext.createOscillator();
+                alarmOscillator.type = 'square';
+                alarmOscillator.frequency.value = 800;
+                alarmOscillator.connect(alarmGainNode);
+                alarmOscillator.start();
+
+                // Alternate frequency for siren effect
+                setInterval(() => {
+                    if (alarmOscillator && currentAlarm) {
+                        alarmOscillator.frequency.value = alarmOscillator.frequency.value === 800 ? 600 : 800;
+                    }
+                }, 500);
+            }
+
+            alarmGainNode.gain.value = 0.3; // Volume
+        }
+
+        function stopAlarmSound() {
+            if (alarmGainNode) {
+                alarmGainNode.gain.value = 0;
+            }
+        }
+
+        function speakAlert(message) {
+            if (!document.getElementById('enableVoice').checked || !window.speechSynthesis) return;
+
+            const utterance = new SpeechSynthesisUtterance(message);
+            utterance.rate = 1.2;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function testAlarm() {
+            currentAlarm = true;
+            document.body.classList.add('alarm-active');
+            playAlarmSound();
+            speakAlert("Alarm test activated. This is a test.");
+
+            setTimeout(() => {
+                currentAlarm = false;
+                stopAlarmSound();
+                document.body.classList.remove('alarm-active');
+            }, 3000);
+        }
+
+        function simulateAudio() {
+            fetch('http://localhost:8001/simulate/audio', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => console.log('Audio simulated:', data))
+                .catch(err => console.error('Error:', err));
+        }
+
+        // Fetch location info
+        fetch('http://localhost:8001/')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('siteName').textContent = data.site_name || 'Unknown Site';
+                if (data.location) {
+                    document.getElementById('locationAddress').textContent = '📍 ' + data.location.address;
+                    document.getElementById('locationCoords').textContent =
+                        `🗺️ ${data.location.latitude.toFixed(4)}, ${data.location.longitude.toFixed(4)}`;
+                }
+            })
+            .catch(err => console.error('Error fetching location:', err));
+
+        function connect() {
+            ws = new WebSocket('ws://localhost:8001/ws');
+
+            ws.onopen = () => {
+                console.log('Connected to WebSocket');
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('statusText').textContent = '✅ Connected to SentiGuard';
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from WebSocket');
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('statusText').textContent = '❌ Disconnected - Retrying...';
+                setTimeout(connect, 2000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    updateUI(data);
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                }
+            };
+        }
+
+        function updateUI(data) {
+            frameCount++;
+
+            // Update video feed
+            if (data.image) {
+                document.getElementById('videoFeed').src = data.image;
+            }
+
+            // Update threat score and status
+            if (data.event) {
+                const threatScore = data.event.threat_score || 0;
+                const status = data.event.status || 'SAFE';
+                const alarm = data.event.alarm || false;
+                const alarmDuration = data.event.alarm_duration || 0;
+                const hasWeapon = data.event.meta?.has_weapon || false;
+
+                document.getElementById('threatScore').textContent = threatScore.toFixed(3);
+
+                const statusEl = document.getElementById('threatStatus');
+                statusEl.textContent = status;
+                statusEl.className = 'threat-status ' + status;
+
+                document.getElementById('alarmState').textContent = alarm ? '🚨 YES' : '❌ No';
+                document.getElementById('alarmDuration').textContent = alarmDuration.toFixed(1) + 's';
+                document.getElementById('weaponStatus').textContent = hasWeapon ? '⚠️ YES' : '✅ No';
+
+                // Handle alarm state
+                if (alarm && !currentAlarm) {
+                    // Alarm just triggered
+                    currentAlarm = true;
+                    if (document.getElementById('enableFlash').checked) {
+                        document.body.classList.add('alarm-active');
+                    }
+                    playAlarmSound();
+                    speakAlert("Alert! Threat detected. Alarm activated.");
+
+                    // Add to event history
+                    addEventToHistory(data.event);
+                } else if (!alarm && currentAlarm) {
+                    // Alarm deactivated
+                    currentAlarm = false;
+                    stopAlarmSound();
+                    document.body.classList.remove('alarm-active');
+                    speakAlert("Threat cleared. Alarm deactivated.");
+                } else if (status === 'WARNING' && Math.random() < 0.1) {
+                    // Occasional voice warning
+                    speakAlert("Warning. Elevated threat level detected.");
+                }
+
+                // Update sensor cards
+                updateSensorCards(data.event);
+
+                // Update metadata
+                updateMetadata(data.event);
+            }
+        }
+
+        function addEventToHistory(event) {
+            const eventItem = {
+                timestamp: new Date(),
+                status: event.status,
+                threat_score: event.threat_score,
+                has_weapon: event.meta?.has_weapon,
+                alarm: event.alarm
+            };
+
+            eventHistory.unshift(eventItem);
+            if (eventHistory.length > 10) {
+                eventHistory = eventHistory.slice(0, 10);
+            }
+
+            updateEventsList();
+        }
+
+        function updateEventsList() {
+            const listEl = document.getElementById('eventsList');
+
+            if (eventHistory.length === 0) {
+                listEl.innerHTML = '<p style="opacity: 0.5;">No eventi yet...</p>';
+                return;
+            }
+
+            listEl.innerHTML = eventHistory.map(event => `
+                <div class="event-item ${event.status}">
+                    <div class="event-time">${event.timestamp.toLocaleTimeString()}</div>
+                    <div style="margin-top: 5px;">
+                        <strong>${event.status}</strong> - 
+                        Threat: ${event.threat_score.toFixed(3)} - 
+                        ${event.has_weapon ? '⚠️ Weapon Detected' : 'No Weapon'} -
+                        ${event.alarm ? '🚨 ALARM' : 'No Alarm'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateSensorCards(event) {
+            const grid = document.getElementById('sensorsGrid');
+
+            // Only create cards once
+            if (grid.children.length === 0) {
+                sensorDefinitions.forEach(def => {
+                    const card = document.createElement('div');
+                    card.className = 'sensor-card';
+                    card.id = 'sensor-' + def.key;
+                    card.innerHTML = `
+                        <div class="sensor-name">${def.name}</div>
+                        <div class="sensor-value" id="value-${def.key}">0.00${def.unit}</div>
+                        <div class="sensor-bar">
+                            <div class="sensor-bar-fill" id="bar-${def.key}" style="width: 0%"></div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+
+            // Update values
+            sensorDefinitions.forEach(def => {
+                const value = event[def.key];
+                if (value !== undefined && value !== null) {
+                    const displayValue = typeof value === 'number' ? value.toFixed(3) : value;
+                    document.getElementById('value-' + def.key).textContent = displayValue + def.unit;
+
+                    // Update bar (only for 0-1 range)
+                    if (typeof value === 'number' && def.unit === '') {
+                        const percentage = Math.min(100, value * 100);
+                        document.getElementById('bar-' + def.key).style.width = percentage + '%';
+                    }
+                }
+            });
+        }
+
+        function updateMetadata(event) {
+            const grid = document.getElementById('metadataGrid');
+
+            const metadata = {
+                'FPS': event.camera_health?.fps?.toFixed(1) || 'N/A',
+                'Camera Health': event.camera_health?.healthy ? '✅ Healthy' : '❌ Degraded',
+                'Frame Frozen': event.camera_health?.frame_frozen ? '❌ Yes' : '✅ No',
+                'Frame Count': event.meta?.frame_count || 0,
+                'Detections': event.meta?.detections?.length || 0,
+                'Has Weapon': event.meta?.has_weapon ? '⚠️ YES' : '✅ No',
+                'Tracked Objects': event.environment_meta?.tracked_objects || 0,
+                'Uptime': (event.environment_meta?.uptime_seconds || 0).toFixed(0) + 's',
+                'Site ID': event.site_id || 'N/A',
+                'Device ID': event.device_id || 'N/A'
+            };
+
+            grid.innerHTML = '';
+            Object.entries(metadata).forEach(([label, value]) => {
+                const item = document.createElement('div');
+                item.className = 'metadata-item';
+                item.innerHTML = `
+                    <div class="metadata-label">${label}</div>
+                    <div class="metadata-value">${value}</div>
+                `;
+                grid.appendChild(item);
+            });
+        }
+
+        // Connect on load
+        connect();
+    </script>
+</body>
+
+</html>

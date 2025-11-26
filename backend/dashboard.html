@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentiGuard 🛡️ - Enterprise Security</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+      min-height: 100vh;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.02);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .gradient-border {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+      border: 2px solid transparent;
+    }
+
+    @keyframes pulse-slow {
+
+      0%,
+      100% {
+        opacity: 0.6;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+
+    .pulse-slow {
+      animation: pulse-slow 3s ease-in-out infinite;
+    }
+
+    @keyframes alert-pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+
+      50% {
+        box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+      }
+    }
+
+    .alarm-border {
+      animation: alert-pulse 1.5s infinite;
+      border: 3px solid #ef4444 !important;
+    }
+  </style>
+</head>
+
+<body class="p-6">
+  <!-- Header -->
+  <div class="glass rounded-3xl p-6 mb-6">
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-4xl font-bold text-white mb-2">🛡️ SentiGuard Enterprise</h1>
+        <p class="text-blue-300/70">AI Security • 60 FPS • 50 Sensors</p>
+      </div>
+      <div class="flex gap-6">
+        <div class="text-center">
+          <div id="ws-status" class="text-sm font-semibold text-emerald-400 mb-1 flex items-center gap-2">
+            <span class="w-2 h-2 bg-emerald-400 rounded-full pulse-slow"></span> Connecting...
+          </div>
+          <div id="fps-display" class="text-xs text-blue-300/60">FPS: --</div>
+        </div>
+        <div class="text-center px-6 py-3 glass rounded-2xl">
+          <div class="text-xs text-blue-300/60 mb-1">THREAT</div>
+          <div id="threat-score" class="text-4xl font-bold text-white">0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-6">
+    <!-- Video Feed -->
+    <div class="col-span-12 lg:col-span-8">
+      <div class="glass rounded-3xl p-6" id="video-container">
+        <div class="flex justify-between mb-4">
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span>📹</span> Live Camera Feed
+          </h2>
+          <div class="flex gap-2">
+            <button onclick="setSource('auto')"
+              class="px-4 py-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-white text-sm font-semibold transition">📷
+              Camera</button>
+            <button onclick="setSource('sample')"
+              class="px-4 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-white text-sm font-semibold transition">🎬
+              Sample</button>
+            <label
+              class="px-4 py-2 rounded-xl bg-pink-600/30 hover:bg-pink-600/50 text-white text-sm font-semibold cursor-pointer transition">
+              📤 Upload<input type="file" id="video-upload" class="hidden" accept="video/*"
+                onchange="uploadVideo(this)">
+            </label>
+          </div>
+        </div>
+
+        <div class="relative rounded-2xl overflow-hidden bg-black/60" style="min-height: 540px;">
+          <img id="live-feed" src="" alt="Loading..." class="w-full" style="min-height: 540px;">
+          <div id="alarm-badge"
+            class="hidden absolute top-8 right-8 px-8 py-4 bg-red-600 text-white font-bold rounded-3xl text-xl shadow-2xl">
+            🚨 ALARM ACTIVE
+          </div>
+          <div class="absolute bottom-6 left-6 right-6 flex justify-between">
+            <div class="px-5 py-3 bg-black/80 backdrop-blur-md rounded-2xl">
+              <span id="camera-status" class="text-white text-sm font-medium">Initializing...</span>
+            </div>
+            <div class="px-5 py-3 bg-black/80 backdrop-blur-md rounded-2xl">
+              <div class="text-emerald-400 text-sm font-bold" id="live-fps">● LIVE • --fps</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-3xl p-6 mt-6">
+        <h3 class="text-xl font-bold text-white mb-4">📋 Recent Events</h3>
+        <div id="event-log" class="space-y-2 max-h-64 overflow-y-auto"></div>
+      </div>
+    </div>
+
+    <!-- Sensors -->
+    <div class="col-span-12 lg:col-span-4 space-y-4">
+      <div class="glass gradient-border rounded-3xl p-6">
+        <h3 class="text-lg font-bold text-white mb-4">⚡ Key Metrics</h3>
+        <div class="grid grid-cols-2 gap-3" id="key-sensors"></div>
+      </div>
+
+      <div class="glass rounded-3xl p-6">
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button onclick="showTab('vision')" data-tab="vision"
+            class="tab-btn px-4 py-2 rounded-xl bg-blue-600/40 text-white text-sm font-semibold">👁️ Vision</button>
+          <button onclick="showTab('audio')" data-tab="audio"
+            class="tab-btn px-4 py-2 rounded-xl bg-purple-600/20 text-white/70 text-sm">🎤 Audio</button>
+          <button onclick="showTab('behavior')" data-tab="behavior"
+            class="tab-btn px-4 py-2 rounded-xl bg-pink-600/20 text-white/70 text-sm">🚶 Behavior</button>
+          <button onclick="showTab('system')" data-tab="system"
+            class="tab-btn px-4 py-2 rounded-xl bg-green-600/20 text-white/70 text-sm">⚙️ System</button>
+        </div>
+        <div id="vision-tab" class="grid grid-cols-1 gap-2"></div>
+        <div id="audio-tab" class="hidden grid-cols-1 gap-2"></div>
+        <div id="behavior-tab" class="hidden grid-cols-1 gap-2"></div>
+        <div id="system-tab" class="hidden grid-cols-1 gap-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <audio id="alarm-sound" preload="auto">
+    <source src="static/alarm.wav" type="audio/wav">
+  </audio>
+
+  <script>
+    const KEY_SENSORS = ['weapon_score', 'motion_score', 'vocal_scream_score', 'crowd_density', 'aggressive_pose_score', 'camera_health'];
+    const SENSORS = {
+      vision: ['motion_score', 'weapon_score', 'aggressive_pose_score', 'fight_interaction_score', 'fall_detect_score', 'running_score', 'crowd_density', 'posture_risk_score', 'tampering_score'],
+      audio: ['vocal_scream_score', 'aggressive_voice_score', 'glass_break_audio_score', 'gunshot_like_score', 'ambient_noise_level'],
+      behavior: ['person_entry_count', 'person_exit_count', 'group_formation_score', 'vehicle_presence_score'],
+      system: ['device_cpu_temp', 'device_ram_usage', 'network_quality_score']
+    };
+
+    function createSensor(key, isKey = false) {
+      const div = document.createElement('div');
+      div.className = isKey ? 'glass rounded-xl p-3' : 'bg-white/5 rounded-lg p-2.5';
+      const name = key.replace(/_/g, ' ');
+      div.innerHTML = `<div class="text-xs text-blue-200/60 mb-2 truncate">${name}</div>
+        <div class="flex items-center justify-between gap-2">
+          <div class="text-lg font-bold text-white" id="val-${key}">--</div>
+          <div class="flex-1 h-1 bg-white/10 rounded-full">
+            <div id="bar-${key}" class="h-full rounded-full bg-gradient-to-r from-green-500 to-blue-500" style="width:0%"></div>
+          </div>
+        </div>`;
+      return div;
+    }
+
+    KEY_SENSORS.forEach(k => document.getElementById('key-sensors').appendChild(createSensor(k, true)));
+    Object.keys(SENSORS).forEach(cat => {
+      const container = document.getElementById(`${cat}-tab`);
+      SENSORS[cat].forEach(k => container.appendChild(createSensor(k)));
+    });
+
+    function showTab(name) {
+      ['vision', 'audio', 'behavior', 'system'].forEach(t => {
+        document.getElementById(`${t}-tab`).classList.add('hidden');
+        document.getElementById(`${t}-tab`).classList.remove('grid');
+      });
+      document.getElementById(`${name}-tab`).classList.remove('hidden');
+      document.getElementById(`${name}-tab`).classList.add('grid');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600/40', 'font-semibold');
+        btn.classList.add('bg-purple-600/20', 'text-white/70');
+      });
+      event.target.classList.add('bg-blue-600/40', 'font-semibold', 'text-white');
+      event.target.classList.remove('bg-purple-600/20', 'text-white/70');
+    }
+
+    let ws, alarmPlaying = false;
+    const statusEl = document.getElementById('ws-status');
+    const threatEl = document.getElementById('threat-score');
+    const fpsEl = document.getElementById('fps-display');
+    const liveFpsEl = document.getElementById('live-fps');
+    const alarmSound = document.getElementById('alarm-sound');
+    const videoContainer = document.getElementById('video-container');
+
+    function connectWS() {
+      ws = new WebSocket('ws://localhost:8001/ws');
+
+      ws.onopen = () => {
+        statusEl.innerHTML = '<span class="w-2 h-2 bg-emerald-400 rounded-full pulse-slow"></span> Connected';
+        document.getElementById('camera-status').textContent = 'Camera active';
+        console.log('✅ WebSocket connected');
+      };
+
+      ws.onerror = (err) => {
+        statusEl.innerHTML = '<span class="w-2 h-2 bg-red-400 rounded-full"></span> Error';
+        console.error('❌ WebSocket error:', err);
+      };
+
+      ws.onclose = () => {
+        statusEl.innerHTML = '<span class="w-2 h-2 bg-orange-400 rounded-full"></span> Disconnected';
+        console.log('🔄 Reconnecting in 3s...');
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.error) return;
+
+        if (data.image) document.getElementById('live-feed').src = data.image;
+
+        const ev = data.event || {};
+        const threat = (ev.threat_score || 0) * 100;
+
+        threatEl.textContent = `${threat.toFixed(0)}%`;
+        threatEl.style.color = threat > 60 ? '#ef4444' : threat > 30 ? '#f59e0b' : '#fff';
+
+        if (ev.fps) {
+          fpsEl.textContent = `FPS: ${ev.fps.toFixed(1)}`;
+          liveFpsEl.textContent = `● LIVE • ${ev.fps.toFixed(1)}fps`;
+        }
+
+        // ALARM: Trigger at 60% threat OR alarm_active flag
+        const badge = document.getElementById('alarm-badge');
+        const shouldAlarm = ev.alarm_active || threat > 60;
+
+        if (shouldAlarm) {
+          badge.classList.remove('hidden');
+          videoContainer.classList.add('alarm-border');
+
+          if ((ev.alarm_sound_play || threat > 60) && !alarmPlaying) {
+            alarmPlaying = true;
+            console.log('🚨 ALARM! Playing sound...');
+            alarmSound.play().catch(e => console.error('Audio error:', e));
+            setTimeout(() => {
+              alarmSound.pause();
+              alarmSound.currentTime = 0;
+              alarmPlaying = false;
+            }, 5000);
+          }
+        } else {
+          badge.classList.add('hidden');
+          videoContainer.classList.remove('alarm-border');
+        }
+
+        // Update sensors
+        [...KEY_SENSORS, ...Object.values(SENSORS).flat()].forEach(key => {
+          let val = ev[key];
+          if (typeof val === 'object') val = val?.fps || 0;
+
+          const valEl = document.getElementById(`val-${key}`);
+          const barEl = document.getElementById(`bar-${key}`);
+
+          if (typeof val === 'number') {
+            const display = val > 1 ? val.toFixed(1) : `${(val * 100).toFixed(0)}%`;
+            const pct = val > 1 ? Math.min(val * 5, 100) : val * 100;
+
+            if (valEl) valEl.textContent = display;
+            if (barEl) {
+              barEl.style.width = `${Math.min(pct, 100)}%`;
+              barEl.className = pct > 70 ? 'h-full rounded-full bg-gradient-to-r from-red-500 to-red-600' :
+                pct > 40 ? 'h-full rounded-full bg-gradient-to-r from-orange-500 to-orange-600' :
+                  'h-full rounded-full bg-gradient-to-r from-green-500 to-blue-500';
+            }
+          }
+        });
+
+        // Event log
+        if (shouldAlarm || threat > 40) {
+          const log = document.getElementById('event-log');
+          const entry = document.createElement('div');
+          entry.className = 'p-3 bg-white/5 rounded-xl text-sm flex items-center gap-3';
+          const icon = shouldAlarm ? '🚨' : '⚠️';
+          const color = shouldAlarm ? 'text-red-400' : 'text-orange-400';
+          entry.innerHTML = `<span class="${color}">${icon}</span><span class="text-white/50">${new Date().toLocaleTimeString()}</span><span class="text-white flex-1">${ev.status}</span><span class="font-bold ${color}">${threat.toFixed(0)}%</span>`;
+          log.insertBefore(entry, log.firstChild);
+          if (log.children.length > 10) log.removeChild(log.lastChild);
+        }
+      };
+    }
+
+    async function setSource(src) {
+      try {
+        const res = await fetch(`http://localhost:8001/config/source?source=${src}`, { method: 'POST' });
+        console.log(`✅ Source set to: ${src}`);
+        document.getElementById('camera-status').textContent = `Switching to ${src}...`;
+      } catch (e) { console.error('❌ Source switch failed:', e); }
+    }
+
+    async function uploadVideo(input) {
+      if (!input.files?.[0]) return;
+      const form = new FormData();
+      form.append('file', input.files[0]);
+      try {
+        document.getElementById('camera-status').textContent = 'Uploading...';
+        const res = await fetch('http://localhost:8001/upload/video', { method: 'POST', body: form });
+        const data = await res.json();
+        console.log('Upload result:', data);
+        alert(data.status === 'success' ? '✅ Video uploaded & processing!' : '❌ Upload failed');
+        document.getElementById('camera-status').textContent = 'Processing uploaded video...';
+      } catch (e) {
+        console.error('❌ Upload error:', e);
+        alert('Upload error');
+      }
+    }
+
+    connectWS();
+  </script>
+</body>
+
+</html>
